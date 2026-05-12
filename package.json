@@ -1,0 +1,18 @@
+{
+  "name": "outreach-ai",
+  "version": "1.0.0",
+  "description": "Auto-generates personalized Behance cover letters for Outreach Leads with Outreach Readiness = 🤖🤖🤖",
+  "main": "index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.52.0",
+    "@notionhq/client": "^2.2.15",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "node-cron": "^3.0.3"
+  }
+}
