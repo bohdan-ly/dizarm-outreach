@@ -114,6 +114,9 @@ async function fetchLeadById(pageId) {
  * @param {string} letter    The generated cover letter text
  */
 async function saveLetter(pageId, leadName, letter) {
+  try {
+
+  console.log(`[outreach-ai] saveLetter: ${pageId} - ${leadName}`);
   const n = getClient();
 
   // Create a new Messages record linked to this lead
@@ -135,6 +138,7 @@ async function saveLetter(pageId, leadName, letter) {
     },
   });
 
+  console.log(`[outreach-ai] saveLetter message created, flipping lead status to done`);
   // Flip lead status to done
   await n.pages.update({
     page_id: pageId,
@@ -144,6 +148,9 @@ async function saveLetter(pageId, leadName, letter) {
       },
     },
   });
+  } catch(e){
+    console.log('[outreach-ai] Error saveLetter:', e.message);
+  }
 }
 
 module.exports = { fetchRobotLeads, fetchLeadById, extractLeadData, saveLetter };
