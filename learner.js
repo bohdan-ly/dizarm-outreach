@@ -8,16 +8,15 @@ const Anthropic  = require('@anthropic-ai/sdk');
 const MESSAGES_DB_ID  = '2e92e6bf072280498301e9aeabc54c39';
 const LEARNINGS_FILE  = path.join(__dirname, 'learnings.json');
 
+// Use Vercel KV when available; fall back to local JSON file for local dev
+const USE_KV = Boolean(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
+
 // ─── Notion helpers ───────────────────────────────────────────────────────────
 
 function getNotion() {
   return new Client({ auth: process.env.NOTION_TOKEN });
 }
 
-/**
- * Fetches all Messages records with Status = "Replied".
- * Returns array of { id, name, message } objects.
- */
 async function fetchRepliedMessages() {
   const n = getNotion();
   const results = [];
@@ -38,43 +37,53 @@ async function fetchRepliedMessages() {
       const p = page.properties;
       const name    = p['Name']?.title?.[0]?.plain_text || '';
       const message = p['Message']?.rich_text?.[0]?.plain_text || '';
-      
+
       if (message) results.push({ id: page.id, name, message });
     }
 
     cursor = res.has_more ? res.next_cursor : undefined;
   } while (cursor);
-  
-  
+
   return results;
 }
 
-// ─── Learnings file ───────────────────────────────────────────────────────────
+// ─── Learnings persistence ────────────────────────────────────────────────────
 
-function loadLearnings() {
+const EMPTY_LEARNINGS = { analyzedIds: [], patterns: '', lastUpdatedAt: null };
+
+async function loadLearnings() {
+  if (USE_KV) {
+    try {
+      const { kv } = require('@vercel/kv');
+      const data = await kv.get('learnings');
+      return data || EMPTY_LEARNINGS;
+    } catch (err) {
+      console.error('[learner] KV read failed:', err.message);
+      return EMPTY_LEARNINGS;
+    }
+  }
   try {
     return JSON.parse(fs.readFileSync(LEARNINGS_FILE, 'utf8'));
   } catch {
-    return { analyzedIds: [], patterns: '', lastUpdatedAt: null };
+    return EMPTY_LEARNINGS;
   }
 }
 
-function saveLearnings(data) {
+async function saveLearnings(data) {
+  if (USE_KV) {
+    try {
+      const { kv } = require('@vercel/kv');
+      await kv.set('learnings', data);
+    } catch (err) {
+      console.error('[learner] KV write failed:', err.message);
+    }
+    return;
+  }
   fs.writeFileSync(LEARNINGS_FILE, JSON.stringify(data, null, 2), 'utf8');
 }
 
 // ─── Claude analysis ──────────────────────────────────────────────────────────
 
-/**
- * Karpathy-style self-improvement pass:
- * Feed all replied cover letters to Claude and ask it to distill
- * what specific patterns, structures, and phrases drove replies.
- * Returns a compact rules string to inject into future prompts.
- *
- * @param {string[]} messages  Array of cover letter texts that got replies
- * @param {string}   existingPatterns  Previously extracted patterns (if any)
- * @returns {Promise<string>}
- */
 async function analyzeReplied(messages, existingPatterns) {
   const anthropic = new Anthropic.default({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -111,15 +120,6 @@ Output 5-10 actionable rules distilled from these examples.`,
 
 // ─── Main learning cycle ──────────────────────────────────────────────────────
 
-/**
- * Runs one full learning cycle:
- * 1. Fetch all Replied messages
- * 2. Skip if no new ones since last run
- * 3. Analyze with Claude
- * 4. Persist updated learnings
- *
- * @returns {{ updated: boolean, count: number, patterns?: string }}
- */
 async function runLearningCycle() {
   const replied = await fetchRepliedMessages();
 
@@ -128,7 +128,7 @@ async function runLearningCycle() {
     return { updated: false, count: 0 };
   }
 
-  const stored = loadLearnings();
+  const stored = await loadLearnings();
   const newIds  = replied.map((m) => m.id).filter((id) => !stored.analyzedIds.includes(id));
 
   if (newIds.length === 0) {
@@ -149,7 +149,7 @@ async function runLearningCycle() {
     lastUpdatedAt: new Date().toISOString(),
   };
 
-  saveLearnings(updated);
+  await saveLearnings(updated);
   console.log(`[learner] Learnings updated from ${replied.length} replied message(s).`);
 
   return { updated: true, count: replied.length, patterns };

@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "crons": [
+    {
+      "path": "/api/cron/scan",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/cron/learn",
+      "schedule": "0 * * * *"
+    }
+  ]
+}

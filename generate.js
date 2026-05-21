@@ -42,7 +42,7 @@ async function generateCoverLetter(lead) {
     ? 'Template B (inbound brief response): acknowledge their brief, highlight 3 key priorities for their project, reference the most relevant Behance case study, end with a soft CTA (15-min call or free Loom).'
     : 'Template A (cold outbound): open with a specific genuine observation about their product/work, suggest one concrete free idea, reference 1-2 Behance case studies with outcomes, end with a soft low-friction CTA.';
 
-  const { patterns } = loadLearnings();
+  const { patterns } = await loadLearnings();
   const learningsBlock = patterns
     ? `\nLEARNED PATTERNS (from real replied messages — follow these closely):\n${patterns}`
     : '';
